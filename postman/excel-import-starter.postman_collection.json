@@ -1,0 +1,136 @@
+{
+    "info":  {
+                 "name":  "Excel Scan API",
+                 "description":  "Scan .xlsx toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://localhost:8080",
+                         "type":  "string"
+                     }
+                 ],
+    "item":  [
+                 {
+                     "name":  "01 - Scan Excel",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              },
+                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "body":  {
+                                                  "mode":  "formdata",
+                                                  "formdata":  [
+                                                                   {
+                                                                       "key":  "file",
+                                                                       "type":  "file",
+                                                                       "src":  "",
+                                                                       "description":  "Chon file .xlsx toi da 10 MB; dong dau la header."
+                                                                   }
+                                                               ]
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"HTTP 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"SCAN_SUCCESS\"));",
+                                                                   "pm.test(\"Rows are JSON array\", () =\u003e pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "02 - Missing file",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              },
+                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "body":  {
+                                                  "mode":  "formdata",
+                                                  "formdata":  [
+                                                                   {
+                                                                       "key":  "note",
+                                                                       "value":  "No file attached",
+                                                                       "type":  "text"
+                                                                   }
+                                                               ]
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"HTTP 400\", () =\u003e pm.response.to.have.status(400));",
+                                                                   "pm.test(\"JSON response\", () =\u003e pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\"));",
+                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"INVALID_EXCEL\"));"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "03 - Wrong content type",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "auth":  {
+                                                  "type":  "noauth"
+                                              },
+                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"HTTP 400\", () =\u003e pm.response.to.have.status(400));",
+                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"INVALID_EXCEL\"));"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 }
+             ]
+}
