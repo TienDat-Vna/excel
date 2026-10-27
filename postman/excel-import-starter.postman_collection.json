@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Excel Scan API",
-                 "description":  "Scan khach hang .xlsx (name, email, phone, unitPrice) toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
+                 "description":  "Scan khach hang .xlsx (id, name, email, phone) toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "variable":  [
@@ -33,7 +33,7 @@
                                                                        "key":  "file",
                                                                        "type":  "file",
                                                                        "src":  "",
-                                                                       "description":  "Chon file .xlsx toi da 10 MB; header dung thu tu: name, email, phone, unitPrice; unitPrice la so thap phan."
+                                                                       "description":  "Chon file .xlsx toi da 10 MB; header dung thu tu: id, name, email, phone; id la so nguyen duong."
                                                                    }
                                                                ]
                                               }

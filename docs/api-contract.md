@@ -19,24 +19,23 @@ API xử lý đồng bộ và trả HTTP 200; không tạo bản ghi scan để 
 ## Quy tắc đọc dữ liệu
 
 1. Đọc sheet đầu tiên, không yêu cầu tên sheet cố định.
-2. Dòng 1 bắt buộc gồm `name`, `email`, `phone`, `unitPrice`, theo đúng thứ tự, phân biệt hoa/thường.
+2. Dòng 1 bắt buộc gồm `id`, `name`, `email`, `phone`, theo đúng thứ tự, phân biệt hoa/thường.
    Bỏ khoảng trắng hai đầu tên cột; từ chối cột thiếu, thừa, trống, trùng hoặc sai thứ tự.
    Ô trống có định dạng phía sau header được bỏ qua.
 3. Từ dòng 2, mỗi dòng map tường minh sang `CustomerData`, không dùng map/header động.
-4. `name`, `email`, `phone` là chuỗi theo định dạng hiển thị Excel, ô trống trả `""`.
-   `unitPrice` là JSON number, dùng `BigDecimal`; ô trống trả `null`, không fallback 0.
-   Ô số lấy giá trị gốc, không phụ thuộc định dạng hiển thị. Giá dạng text dùng dấu chấm
-   thập phân, không chứa dấu phân cách hàng nghìn hoặc ký hiệu tiền; sai kiểu trả `INVALID_EXCEL`.
-   Không tự làm tròn hay quy định scale. Precision của ô số đã lưu trong Excel vẫn bị giới hạn bởi Excel.
-5. Bỏ qua dòng hoàn toàn trống. File chỉ có header trả mảng rỗng `[]`.
-   Giá dạng text chỉ chứa khoảng trắng được coi là `null`; dòng không còn dữ liệu sau map bị bỏ qua.
-   Giá dạng số vẫn được đọc dù định dạng Excel ẩn hiển thị của ô, kể cả giá bằng 0.
+4. `id` là JSON integer, dùng `Long`, bắt buộc là số nguyên dương từ 1 đến 9223372036854775807.
+   Ô số được đọc từ giá trị gốc, không lấy chuỗi hiển thị có dấu phân cách/làm tròn.
+   Ô Text được bỏ khoảng trắng hai đầu rồi parse sang Long; không chấp nhận text thập phân hoặc số mũ.
+   Không tự sinh id, không tự cắt phần thập phân hoặc fallback về 0.
+   `name`, `email`, `phone` là chuỗi theo định dạng hiển thị Excel, ô trống trả `""`.
+5. Bỏ dòng hoàn toàn trống, kể cả dòng chỉ có khoảng trắng trong ô id. Dòng có dữ liệu nhưng thiếu id bị từ chối.
+   File chỉ có header trả mảng rỗng `[]`. Chưa kiểm tra trùng id hoặc validate nghiệp vụ email/phone.
 6. Dữ liệu phải nằm trong các cột có header; nếu có giá trị ở cột thiếu header thì trả lỗi 400.
    Số/boolean/lỗi ở cột ngoài schema vẫn bị từ chối dù định dạng Excel ẩn hiển thị của ô.
 
 Sheet được đọc có ô gộp vẫn bị từ chối với HTTP 400, errorCode `INVALID_EXCEL`.
 Công thức trả kết quả đã lưu trong file, không tính lại và có thể cũ hoặc thiếu nếu file chưa lưu kết quả.
-Ô lỗi ở trường chuỗi được giữ nguyên; ô lỗi hoặc boolean ở `unitPrice` trả `INVALID_EXCEL`.
+Ô lỗi ở trường chuỗi được giữ nguyên; ô lỗi hoặc boolean ở `id` trả `INVALID_EXCEL`.
 Định dạng hiển thị dùng locale `en-US` để kết quả không phụ thuộc locale máy chủ.
 
 ## Response thành công
@@ -47,30 +46,31 @@ không gồm dòng header và dòng hoàn toàn trống.
 
 Ví dụ file đầu vào:
 
-| name | email | phone | unitPrice |
+| id | name | email | phone |
 | --- | --- | --- | --- |
-| Nguyễn Văn A | a@example.com | 0901234567 | 125000.125 |
-| Trần Thị B | b@example.com | | |
+| 1 | Nguyễn Văn A | a@example.com | 0901234567 |
+| 2 | Trần Thị B | b@example.com | |
 
 ```json
 [
   {
+    "id": 1,
     "name": "Nguyễn Văn A",
     "email": "a@example.com",
-    "phone": "0901234567",
-    "unitPrice": 125000.125
+    "phone": "0901234567"
   },
   {
+    "id": 2,
     "name": "Trần Thị B",
     "email": "b@example.com",
-    "phone": "",
-    "unitPrice": null
+    "phone": ""
   }
 ]
 ```
 
 Bốn trường trên là schema cố định. File có header tùy ý từ contract cũ không còn được chấp nhận.
-Để giữ số 0 đầu, đặt dữ liệu như số điện thoại ở dạng Text trong Excel.
+Để giữ số 0 đầu, đặt số điện thoại ở dạng Text. ID dài cũng nên lưu dạng Text để tránh Excel làm mất chữ số.
+Đổi mẫu cột là thay đổi contract theo yêu cầu: file và client cũ phải chuyển sang id/name/email/phone.
 
 ## Lỗi cơ bản
 
@@ -80,7 +80,7 @@ Thiếu/rỗng file hoặc header không hợp lệ dùng chung mã `INVALID_EXC
 | HTTP | errorCode | Trường hợp |
 | --- | --- | --- |
 | 400 | INVALID_FILE_TYPE | File không phải `.xlsx` |
-| 400 | INVALID_EXCEL | Thiếu/rỗng file, multipart lỗi, workbook/header không hợp lệ, unitPrice sai kiểu hoặc sheet có ô gộp |
+| 400 | INVALID_EXCEL | Thiếu/rỗng file, multipart lỗi, workbook/header không hợp lệ, id thiếu hoặc không hợp lệ hoặc sheet có ô gộp |
 | 413 | FILE_TOO_LARGE | File vượt 10 MB |
 
 Response lỗi dùng cấu trúc riêng theo mẫu exception, không có `data` và `errors`:

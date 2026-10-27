@@ -1,7 +1,7 @@
 # Excel → JSON API
 
 API nhận một file `.xlsx` tối đa 10 MB, đọc sheet đầu tiên và trả dữ liệu JSON.
-Dòng 1 gồm `name`, `email`, `phone`, `unitPrice` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Không dùng database.
+Dòng 1 gồm `id`, `name`, `email`, `phone` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Không dùng database.
 
 ## Chạy ứng dụng
 
@@ -30,12 +30,12 @@ Port mặc định 8080; đổi bằng biến môi trường `SERVER_PORT`.
 
 Endpoint: `POST /api/excel-scans-customer`.
 Response thành công: HTTP 200, body là mảng `CustomerData` trực tiếp, không có lớp bọc code/message/data/errors.
-`name`, `email`, `phone` trả dạng chuỗi; ô trống là `""`. `unitPrice` là số thập phân (`BigDecimal`), ô trống là `null`. Bỏ qua dòng trống.
+`id` là số nguyên dương (`Long`), bắt buộc với dòng có dữ liệu. `name`, `email`, `phone` là chuỗi; ô trống trả `""`. Bỏ qua dòng trống.
 File chỉ có header trả `[]`.
 
 Giới hạn 10 MB/file, 11 MB/request. Từ chối file sai định dạng, header thiếu/trùng,
 cột dữ liệu thiếu header hoặc ô gộp trên sheet được đọc.
-Công thức dùng kết quả đã lưu, không tính lại. Ô lỗi ở trường chuỗi giữ nguyên; ô lỗi hoặc giá trị không phải số tại `unitPrice` trả `INVALID_EXCEL`.
+Công thức dùng kết quả đã lưu, không tính lại. Ô lỗi ở trường chuỗi giữ nguyên; id thiếu, sai kiểu, không dương hoặc vượt Long trả `INVALID_EXCEL`.
 Đặt số điện thoại/mã có số 0 đầu ở dạng Text trong Excel để giữ nguyên dữ liệu.
 
 Response lỗi dùng `code = -1`, `errorCode` là mã lỗi; `message` là khóa thông báo và `messageDetail` là chi tiết tiếng Việt. Client cần đọc `errorCode` cho lỗi; khi thành công, đọc mảng trực tiếp từ body.
@@ -45,7 +45,7 @@ Contract và ví dụ JSON: [docs/api-contract.md](docs/api-contract.md).
 ## Cấu trúc chính
 
 - `controller/ExcelScanController.java`: nhận multipart, gọi service và trả JSON.
-- `dto/CustomerData.java`: DTO cố định gồm name/email/phone/unitPrice.
+- `dto/CustomerData.java`: DTO cố định gồm id/name/email/phone.
 - `service/CustomerService.java`: mở/đóng workbook, đọc từng dòng và map DTO khách hàng.
 - `service/ExcelScanService.java`: chỉ validate file, workbook, header và cấu trúc dòng.
 - `constant/FileConstant.java`: hằng số dùng cho xử lý file, như giới hạn dung lượng.
@@ -84,8 +84,8 @@ workbook luôn được đóng bằng try-with-resources.
 `ExcelScanService` không mở file, đọc danh sách bản ghi hoặc map DTO.
 Header cố định và đúng thứ tự; bỏ khoảng trắng hai đầu tên cột.
 `DataFormatter` giữ định dạng hiển thị cho các trường chuỗi.
-`unitPrice` lấy giá trị số gốc, không lấy chuỗi hiển thị đã làm tròn hoặc có phân cách hàng nghìn.
-Giá dạng text phải chuyển trực tiếp được sang `BigDecimal`, dùng dấu chấm thập phân, không chứa ký hiệu tiền/phân cách hàng nghìn.
+`id` lấy giá trị số nguyên gốc, không phụ thuộc định dạng hiển thị. ID dạng Text được parse sang Long;
+ID dài nên lưu Text trong Excel để tránh mất chữ số. Không tự sinh id hoặc kiểm tra trùng id trong bước scan.
 Khi gặp lỗi, theo tiếp `APIException` → `ErrorCodeDetail` → `APIExceptionHandler`.
 
 ## Giới hạn hiện tại
