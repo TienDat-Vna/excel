@@ -8,15 +8,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.FormulaError;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -30,15 +26,16 @@ class ExcelScanTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
-    void scansDynamicHeadersAndFormattedValuesFromFirstSheet() throws Exception {
+    void scansFixedCustomerDtoAndFormattedValuesFromFirstSheet() throws Exception {
         try (var workbook = new XSSFWorkbook()) {
-            var sheet = workbook.createSheet("Products");
+            var sheet = workbook.createSheet("Customers");
             var header = sheet.createRow(0);
-            header.createCell(0).setCellValue(" product ");
-            header.createCell(1).setCellValue("quantity");
-            header.createCell(2).setCellValue("reference");
+            header.createCell(0).setCellValue(" name ");
+            header.createCell(1).setCellValue("email");
+            header.createCell(2).setCellValue("phone");
+            header.createCell(3).setCellValue("unitPrice");
             var row = sheet.createRow(1);
-            row.createCell(0).setCellValue("Sản phẩm A");
+            row.createCell(0).setCellValue("Nguyễn Văn A");
             row.createCell(1).setCellValue(12);
             var style = workbook.createCellStyle();
             style.setDataFormat(workbook.createDataFormat().getFormat("000000"));
@@ -50,70 +47,24 @@ class ExcelScanTest {
             var response = upload("data.xlsx", bytes(workbook));
             assertEquals(200, response.statusCode());
             var json = mapper.readTree(response.body());
-            assertEquals("SCAN_SUCCESS", json.path("code").asText());
-            assertEquals(2, json.path("data").size());
-            assertEquals("Sản phẩm A", json.at("/data/0/product").asText());
-            assertEquals("12", json.at("/data/0/quantity").asText());
-            assertEquals("000123", json.at("/data/0/reference").asText());
-            assertEquals("", json.at("/data/1/quantity").asText());
+            assertTrue(json.isArray());
+            assertEquals(2, json.size());
+            assertEquals("Nguyễn Văn A", json.at("/0/name").asText());
+            assertEquals("12", json.at("/0/email").asText());
+            assertEquals("000123", json.at("/0/phone").asText());
+            assertEquals(4, json.at("/0").size());
+            assertTrue(json.at("/0/unitPrice").isNull());
+            assertEquals("", json.at("/1/email").asText());
         }
-    }
-
-    @Test
-    @ExtendWith(OutputCaptureExtension.class)
-    void logsOneSummaryAfterSuccessfulRead(CapturedOutput output) throws Exception {
-        try (var workbook = new XSSFWorkbook()) {
-            var sheet = workbook.createSheet();
-            sheet.createRow(0).createCell(0).setCellValue("private-header");
-            sheet.createRow(1).createCell(0).setCellValue("private-cell");
-            int logStart = output.getAll().length();
-
-            var response = upload("private-file.xlsx", bytes(workbook));
-
-            assertEquals(200, response.statusCode());
-            List<String> logs = scanLogs(output, logStart);
-            assertEquals(1, logs.size(), logs.toString());
-            assertTrue(logs.getFirst().contains("result=SUCCESS"));
-            assertTrue(logs.getFirst().contains("rowCount=1 columnCount=1 readDurationMs="));
-            assertFalse(logs.getFirst().contains("private-"));
-            assertFalse(output.getAll().substring(logStart).contains("private-cell"),
-                    "Framework logs must not print Excel response data");
-        }
-    }
-
-    @Test
-    @ExtendWith(OutputCaptureExtension.class)
-    void logsOneFailureWithCoordinatesWithoutHeaderOrFilename(CapturedOutput output) throws Exception {
-        try (var workbook = new XSSFWorkbook()) {
-            var header = workbook.createSheet().createRow(0);
-            header.createCell(0).setCellValue("private-header");
-            header.createCell(1).setCellValue("private-header");
-            int logStart = output.getAll().length();
-
-            var response = upload("private-file.xlsx", bytes(workbook));
-
-            assertError(response, 400, "INVALID_EXCEL");
-            List<String> logs = scanLogs(output, logStart);
-            assertEquals(1, logs.size(), logs.toString());
-            assertTrue(logs.getFirst().contains("reason=DUPLICATE_COLUMN_NAME row=1 column=2 firstColumn=1"));
-            assertFalse(logs.getFirst().contains("private-"));
-            assertFalse(logs.getFirst().contains("result=SUCCESS"));
-        }
-    }
-
-    private List<String> scanLogs(CapturedOutput output, int start) {
-        return output.getAll().substring(start).lines()
-                .filter(line -> line.contains("[EXCEL_SCAN]["))
-                .toList();
     }
 
     @Test
     void headerOnlyReturnsEmptyArray() throws Exception {
         try (var workbook = new XSSFWorkbook()) {
-            workbook.createSheet().createRow(0).createCell(0).setCellValue("field");
+            createCustomerHeader(workbook.createSheet());
             var response = upload("data.xlsx", bytes(workbook));
             assertEquals(200, response.statusCode());
-            assertTrue(mapper.readTree(response.body()).path("data").isEmpty());
+            assertTrue(mapper.readTree(response.body()).isEmpty());
         }
     }
 
@@ -128,7 +79,7 @@ class ExcelScanTest {
     }
 
     @Test
-    void rejectsMissingDuplicateAndUnmappedHeaders() throws Exception {
+    void rejectsMissingAndDuplicateHeaders() throws Exception {
         try (var workbook = new XSSFWorkbook()) {
             var sheet = workbook.createSheet();
             assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
@@ -136,8 +87,28 @@ class ExcelScanTest {
             header.createCell(0).setCellValue("id");
             header.createCell(1).setCellValue(" id ");
             assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
-            header.getCell(1).setBlank();
-            sheet.createRow(1).createCell(1).setCellValue("unmapped");
+        }
+    }
+
+    @Test
+    void validatesHeaderOrderAndIgnoresTrailingBlankCells() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            var header = sheet.getRow(0);
+            header.createCell(6).setBlank();
+            assertEquals(200, upload("data.xlsx", bytes(workbook)).statusCode());
+
+            header.getCell(1).setCellValue("phone");
+            header.getCell(2).setCellValue("email");
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+
+            header.getCell(1).setCellValue("email");
+            header.getCell(2).setBlank();
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+
+            header.getCell(2).setCellValue("phone");
+            header.getCell(6).setCellValue("extra");
             assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
         }
     }
@@ -155,7 +126,7 @@ class ExcelScanTest {
     void readsCachedFormulasAndErrorsButRejectsMergedCells() throws Exception {
         try (var workbook = new XSSFWorkbook()) {
             var sheet = workbook.createSheet();
-            sheet.createRow(0).createCell(0).setCellValue("value");
+            createCustomerHeader(sheet);
             var cell = sheet.createRow(1).createCell(0);
             cell.setCellFormula("1+1");
             workbook.getCreationHelper().createFormulaEvaluator().evaluateFormulaCell(cell);
@@ -163,8 +134,8 @@ class ExcelScanTest {
             var response = upload("data.xlsx", bytes(workbook));
             assertEquals(200, response.statusCode());
             var json = mapper.readTree(response.body());
-            assertEquals("2", json.at("/data/0/value").asText());
-            assertEquals("#DIV/0!", json.at("/data/1/value").asText());
+            assertEquals("2", json.at("/0/name").asText());
+            assertEquals("#DIV/0!", json.at("/1/name").asText());
             cell.setBlank();
             sheet.addMergedRegion(new CellRangeAddress(1, 2, 0, 0));
             assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
@@ -188,14 +159,121 @@ class ExcelScanTest {
         assertError(wrong, 400, "INVALID_EXCEL");
     }
 
+    @Test
+    void mapsDecimalPricesWithoutDisplayRounding() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            var price = sheet.createRow(1).createCell(3);
+            price.setCellValue(125000.125);
+            var style = workbook.createCellStyle();
+            style.setDataFormat(workbook.createDataFormat().getFormat("#,##0"));
+            price.setCellStyle(style);
+            sheet.createRow(2).createCell(3).setCellValue("12345678901234567890.123456789");
+            var formula = sheet.createRow(3).createCell(3);
+            formula.setCellFormula("1/4");
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateFormulaCell(formula);
+
+            var response = upload("data.xlsx", bytes(workbook));
+            assertEquals(200, response.statusCode(), response.body());
+            var json = mapper.readTree(response.body());
+            assertTrue(json.at("/0/unitPrice").isNumber());
+            assertTrue(response.body().contains("125000.125"), response.body());
+            assertTrue(response.body().contains("12345678901234567890.123456789"), response.body());
+            assertEquals("0.25", json.at("/2/unitPrice").asText());
+        }
+    }
+
+    @Test
+    void readsPricesEvenWhenNumberFormatHidesTheirDisplay() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            var style = workbook.createCellStyle();
+            style.setDataFormat(workbook.createDataFormat().getFormat("\"\";\"\";\"\";\"\""));
+            var price = sheet.createRow(1).createCell(3);
+            price.setCellValue(125000.125);
+            price.setCellStyle(style);
+            assertEquals("", new org.apache.poi.ss.usermodel.DataFormatter().formatCellValue(price));
+
+            var response = upload("data.xlsx", bytes(workbook));
+            assertEquals(200, response.statusCode(), response.body());
+            var json = mapper.readTree(response.body());
+            assertEquals(1, json.size());
+            assertEquals("125000.125", json.at("/0/unitPrice").asText());
+
+            price.setCellValue(0);
+            response = upload("data.xlsx", bytes(workbook));
+            assertEquals(200, response.statusCode(), response.body());
+            var zero = mapper.readTree(response.body()).at("/0/unitPrice");
+            assertTrue(zero.isNumber());
+            assertEquals(0.0, zero.asDouble());
+        }
+    }
+
+    @Test
+    void skipsRowsWithOnlyBlankTextPrice() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            sheet.createRow(1).createCell(3).setCellValue("   ");
+            var response = upload("data.xlsx", bytes(workbook));
+            assertEquals(200, response.statusCode(), response.body());
+            assertTrue(mapper.readTree(response.body()).isEmpty());
+        }
+    }
+
+    @Test
+    void rejectsValuesOutsideSchemaEvenWhenNumberFormatHidesThem() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            var style = workbook.createCellStyle();
+            style.setDataFormat(workbook.createDataFormat().getFormat("\"\";\"\";\"\";\"\""));
+            var extra = sheet.createRow(1).createCell(4);
+            extra.setCellValue(100);
+            extra.setCellStyle(style);
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+        }
+    }
+
+    @Test
+    void rejectsInvalidPricesAndUnexpectedCustomerSchema() throws Exception {
+        try (var workbook = new XSSFWorkbook()) {
+            var sheet = workbook.createSheet();
+            createCustomerHeader(sheet);
+            var price = sheet.createRow(1).createCell(3);
+            price.setCellValue("not-a-price");
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+            price.setCellErrorValue(FormulaError.DIV0.getCode());
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+            price.setCellValue(true);
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+            price.setBlank();
+            sheet.createRow(2).createCell(4).setCellValue("extra");
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+            sheet.removeRow(sheet.getRow(2));
+            sheet.getRow(0).getCell(0).setCellValue("product");
+            assertError(upload("data.xlsx", bytes(workbook)), 400, "INVALID_EXCEL");
+        }
+    }
+
+    private void createCustomerHeader(org.apache.poi.ss.usermodel.Sheet sheet) {
+        var header = sheet.createRow(0);
+        header.createCell(0).setCellValue("name");
+        header.createCell(1).setCellValue("email");
+        header.createCell(2).setCellValue("phone");
+        header.createCell(3).setCellValue("unitPrice");
+    }
+
     private URI endpoint() {
-        return URI.create("http://localhost:" + port + "/api/excel-scans");
+        return URI.create("http://localhost:" + port + "/api/excel-scans-customer");
     }
 
     @Test
     void previousCustomerImportUrlIsNotAvailable() throws Exception {
         try (var workbook = new XSSFWorkbook()) {
-            workbook.createSheet().createRow(0).createCell(0).setCellValue("field");
+            createCustomerHeader(workbook.createSheet());
             var response = upload(URI.create("http://localhost:" + port + "/api/customers/import"),
                     "data.xlsx", bytes(workbook));
             assertDefaultError(response, 404);
@@ -239,12 +317,21 @@ class ExcelScanTest {
     private void assertError(HttpResponse<String> response, int status, String code) throws Exception {
         assertEquals(status, response.statusCode(), response.body());
         JsonNode json = mapper.readTree(response.body());
-        assertEquals(code, json.path("code").asText());
-        assertTrue(json.path("data").isNull());
+        assertEquals(-1, json.path("code").asInt());
+        assertEquals(code, json.path("errorCode").asText());
+        assertEquals(code, json.path("message").asText());
+        String messageDetail = switch (code) {
+            case "INVALID_FILE_TYPE" -> "Chỉ nhận file .xlsx.";
+            case "INVALID_EXCEL" -> "File Excel không hợp lệ.";
+            case "FILE_TOO_LARGE" -> "File tối đa 10 MB.";
+            default -> throw new AssertionError("Unexpected error code: " + code);
+        };
+        assertEquals(messageDetail, json.path("messageDetail").asText());
+        assertEquals(4, json.size());
     }
 
     private void assertDefaultError(HttpResponse<String> response, int status) throws Exception {
         assertEquals(status, response.statusCode(), response.body());
-        assertFalse(mapper.readTree(response.body()).has("code"), "Spring HTTP errors must not use ExcelDataResponse");
+        assertFalse(mapper.readTree(response.body()).has("code"), "Spring HTTP errors must not use APIErrorResponse");
     }
 }

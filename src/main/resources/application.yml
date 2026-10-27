@@ -9,7 +9,3 @@ spring:
       max-file-size: 10MB
       # Cho phep them multipart headers/boundary ngoai dung luong file.
       max-request-size: 11MB
-
-logging:
-  level:
-    org.springframework.web: INFO
