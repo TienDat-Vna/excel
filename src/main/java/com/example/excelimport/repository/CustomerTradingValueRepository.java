@@ -25,7 +25,7 @@ public class CustomerTradingValueRepository {
 
     /** Đọc toàn bộ bảng trong một snapshot, xử lý lần lượt từng dòng. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public void readAll(Consumer<CustomerTradingValueData> rowConsumer) {
+    public void readAllTradingValues(Consumer<CustomerTradingValueData> rowConsumer) {
         RowCallbackHandler rowCallback = resultSet -> {
             CustomerTradingValueData rowData = new CustomerTradingValueData(
                     resultSet.getLong("id"),

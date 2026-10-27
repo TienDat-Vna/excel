@@ -53,8 +53,8 @@ class CustomerTradingValueControllerTest {
     void downloadsFileAndDeletesTemporaryFile() throws Exception {
         byte[] content = new byte[]{1, 2, 3};
         Path file = Files.write(temporaryDirectory.resolve("export.xlsx"), content);
-        when(service.exportAll()).thenReturn(file);
-        doCallRealMethod().when(service).deleteExport(any());
+        when(service.exportCustomerTradingValues()).thenReturn(file);
+        doCallRealMethod().when(service).deleteExportFile(any());
 
         mockMvc.perform(get("/api/customer-trading-values/export"))
                 .andExpect(status().isOk())
@@ -70,7 +70,7 @@ class CustomerTradingValueControllerTest {
 
     @Test
     void mapsConnectionAndTransactionFailuresTo503() throws Exception {
-        when(service.exportAll()).thenThrow(
+        when(service.exportCustomerTradingValues()).thenThrow(
                 new CannotGetJdbcConnectionException("internal connection detail"),
                 new CannotCreateTransactionException("internal transaction detail")
         );
@@ -86,7 +86,7 @@ class CustomerTradingValueControllerTest {
 
     @Test
     void mapsQueryFailureTo500() throws Exception {
-        when(service.exportAll()).thenThrow(
+        when(service.exportCustomerTradingValues()).thenThrow(
                 new DataAccessResourceFailureException("internal SQL detail")
         );
 
@@ -97,7 +97,7 @@ class CustomerTradingValueControllerTest {
 
     @Test
     void mapsExportFailureTo500() throws Exception {
-        when(service.exportAll()).thenThrow(new APIException(ErrorCodeDetail.EXCEL_EXPORT_FAILED));
+        when(service.exportCustomerTradingValues()).thenThrow(new APIException(ErrorCodeDetail.EXCEL_EXPORT_FAILED));
 
         mockMvc.perform(get("/api/customer-trading-values/export"))
                 .andExpect(status().isInternalServerError())
@@ -107,15 +107,15 @@ class CustomerTradingValueControllerTest {
     @Test
     void deletesFileWhenClientDisconnects() throws Exception {
         Path file = Files.write(temporaryDirectory.resolve("export.xlsx"), new byte[]{1});
-        when(service.exportAll()).thenReturn(file);
-        doCallRealMethod().when(service).deleteExport(any());
+        when(service.exportCustomerTradingValues()).thenReturn(file);
+        doCallRealMethod().when(service).deleteExportFile(any());
         HttpServletResponse response = mock(HttpServletResponse.class);
         ServletOutputStream output = mock(ServletOutputStream.class);
         when(response.getOutputStream()).thenReturn(output);
         doThrow(new IOException("client disconnected")).when(output).write(any(byte[].class), anyInt(), anyInt());
         when(response.isCommitted()).thenReturn(true);
 
-        controller.exportAll(response);
+        controller.exportCustomerTradingValues(response);
 
         assertFalse(Files.exists(file));
         verify(response, never()).reset();
@@ -124,12 +124,12 @@ class CustomerTradingValueControllerTest {
     @Test
     void resetsUncommittedFileResponseBeforeReturningJsonError() throws Exception {
         Path file = Files.write(temporaryDirectory.resolve("export.xlsx"), new byte[]{1});
-        when(service.exportAll()).thenReturn(file);
-        doCallRealMethod().when(service).deleteExport(any());
+        when(service.exportCustomerTradingValues()).thenReturn(file);
+        doCallRealMethod().when(service).deleteExportFile(any());
         HttpServletResponse response = mock(HttpServletResponse.class);
         when(response.getOutputStream()).thenThrow(new IOException("cannot open stream"));
 
-        APIException failure = assertThrows(APIException.class, () -> controller.exportAll(response));
+        APIException failure = assertThrows(APIException.class, () -> controller.exportCustomerTradingValues(response));
 
         assertEquals("EXCEL_EXPORT_FAILED", failure.getErrorCode());
         assertFalse(Files.exists(file));

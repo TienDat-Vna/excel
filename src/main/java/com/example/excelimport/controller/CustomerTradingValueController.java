@@ -27,9 +27,9 @@ public class CustomerTradingValueController {
 
     /** Xuất tất cả bản ghi */
     @GetMapping("/export")
-    public void exportAll(HttpServletResponse response) {
+    public void exportCustomerTradingValues(HttpServletResponse response) {
 
-        Path exportFile = customerTradingValueService.exportAll();
+        Path exportFile = customerTradingValueService.exportCustomerTradingValues();
 
         try {
             // Lấy kích thước file để set Content-Length
@@ -54,7 +54,7 @@ public class CustomerTradingValueController {
             LOGGER.error("[TRADING_VALUE][DOWNLOAD] errorCode=EXPORT_DOWNLOAD_FAILED");
         } finally {
             // Xóa file tạm sau khi xuất xong
-            customerTradingValueService.deleteExport(exportFile);
+            customerTradingValueService.deleteExportFile(exportFile);
         }
     }
 }

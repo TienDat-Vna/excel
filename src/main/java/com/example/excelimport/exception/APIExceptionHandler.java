@@ -32,8 +32,13 @@ public class APIExceptionHandler {
         return ResponseEntity.status(exception.getStatus()).body(response);
     }
 
-    @ExceptionHandler({CannotGetJdbcConnectionException.class, CannotCreateTransactionException.class})
-    ResponseEntity<APIErrorResponse> handleDatabaseConnectionException(RuntimeException exception) {
+    @ExceptionHandler(CannotGetJdbcConnectionException.class)
+    ResponseEntity<APIErrorResponse> handleDatabaseConnectionException(CannotGetJdbcConnectionException exception) {
+        return handleAPIException(new APIException(ErrorCodeDetail.DATABASE_UNAVAILABLE));
+    }
+
+    @ExceptionHandler(CannotCreateTransactionException.class)
+    ResponseEntity<APIErrorResponse> handleDatabaseTransactionException(CannotCreateTransactionException exception) {
         return handleAPIException(new APIException(ErrorCodeDetail.DATABASE_UNAVAILABLE));
     }
 

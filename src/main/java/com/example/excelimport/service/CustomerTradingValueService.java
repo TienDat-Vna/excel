@@ -28,8 +28,13 @@ public class CustomerTradingValueService {
     @Autowired
     private CustomerTradingValueRepository customerTradingValueRepository;
 
-    /** Xuất tất cả bản ghi */
-    public Path exportAll() {
+    /**
+     * Tạo file Excel chứa toàn bộ bản ghi giao dịch.
+     *
+     * @return file tạm hoàn chỉnh; controller xóa sau khi gửi
+     * @throws APIException nếu tạo hoặc ghi file thất bại
+     */
+    public Path exportCustomerTradingValues() {
 
         Path exportFile = null;
         boolean completed = false;
@@ -38,17 +43,16 @@ public class CustomerTradingValueService {
 
             exportFile = Files.createTempFile("customer-trading-values-", ".xlsx");
 
-            // Sử dụng SXSSFWorkbook để xuất dữ liệu
-            try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
+            // Giữ cửa sổ 100 dòng; các dòng cũ được ghi xuống file tạm của POI.
+            try (SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+                 OutputStream outputStream = Files.newOutputStream(exportFile)) {
                 workbook.setCompressTempFiles(true);
                 createSheet(workbook);
 
                 // Gọi repository đọc dữ liệu và ghi vào workbook
-                customerTradingValueRepository.readAll(rowData -> writeDataRow(workbook, rowData));
+                customerTradingValueRepository.readAllTradingValues(rowData -> writeDataRow(workbook, rowData));
 
-                try (OutputStream outputStream = Files.newOutputStream(exportFile)) {
-                    workbook.write(outputStream);
-                }
+                workbook.write(outputStream);
             }
             completed = true;
             return exportFile;
@@ -56,21 +60,25 @@ public class CustomerTradingValueService {
         } catch (IOException | UncheckedIOException exception) {
             throw new APIException(ErrorCodeDetail.EXCEL_EXPORT_FAILED);
         } catch (IllegalStateException exception) {
-            // Nếu client ngắt kết nối, ném Exception
+            // SXSSF bọc lỗi I/O khi tự ghi các dòng cũ xuống đĩa.
             if (exception.getCause() instanceof IOException) {
                 throw new APIException(ErrorCodeDetail.EXCEL_EXPORT_FAILED);
             }
             throw exception;
         } finally {
-            // Xóa file cả khi xuất lỗi hoặc client ngắt kết nối.
+            // Chỉ bàn giao file cho controller khi đã tạo và đóng thành công.
             if (!completed && exportFile != null) {
-                deleteExport(exportFile);
+                deleteExportFile(exportFile);
             }
         }
     }
 
-    /** Xóa file */
-    public void deleteExport(Path exportFile) {
+    /**
+     * Xóa file tạm, ghi log nếu không xóa được để giữ nguyên kết quả xuất ban đầu.
+     *
+     * @param exportFile file tạm cần xóa
+     */
+    public void deleteExportFile(Path exportFile) {
         try {
             Files.deleteIfExists(exportFile);
         } catch (IOException exception) {
@@ -78,13 +86,19 @@ public class CustomerTradingValueService {
         }
     }
 
-    // Tạo sheet mới với header
+    /**
+     * Tạo sheet với header cố định, dùng cho sheet đầu và khi sheet cũ đầy.
+     *
+     * @param workbook workbook đang xuất
+     * @return sheet vừa tạo
+     */
     private Sheet createSheet(SXSSFWorkbook workbook) {
         Sheet sheet = workbook.createSheet("TradingValues_" + (workbook.getNumberOfSheets() + 1));
         Row headerRow = sheet.createRow(0);
 
         for (int columnIndex = 0; columnIndex < tradingValueHeaders.size(); columnIndex++) {
             headerRow.createCell(columnIndex).setCellValue(tradingValueHeaders.get(columnIndex));
+            // Độ rộng tương ứng khoảng 26 ký tự, đơn vị của POI là 1/256 ký tự.
             sheet.setColumnWidth(columnIndex, 26 * 256);
         }
 
@@ -92,7 +106,12 @@ public class CustomerTradingValueService {
         return sheet;
     }
 
-    // Ghi dữ liệu vào sheet cuối cùng
+    /**
+     * Ghi một bản ghi vào sheet cuối, chuyển sheet khi đạt giới hạn dòng.
+     *
+     * @param workbook workbook đang xuất
+     * @param rowData bản ghi lấy từ DB
+     */
     private void writeDataRow(SXSSFWorkbook workbook, CustomerTradingValueData rowData) {
         Sheet sheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
         int rowIndex = sheet.getLastRowNum() + 1;
@@ -104,7 +123,7 @@ public class CustomerTradingValueService {
         }
 
         Row dataRow = sheet.createRow(rowIndex);
-        // Ghi dữ liệu vào các cột
+        // Text giữ mã có số 0 đầu, ID dài và precision của tiền.
         dataRow.createCell(0).setCellValue(rowData.id().toString());
         dataRow.createCell(1).setCellValue(rowData.customerId().toString());
         dataRow.createCell(2).setCellValue(rowData.branchId());

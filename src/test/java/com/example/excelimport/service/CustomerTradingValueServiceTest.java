@@ -50,9 +50,9 @@ class CustomerTradingValueServiceTest {
                     251L, 1002L, "0002", "=1+1", new BigDecimal("0.00")
             ));
             return null;
-        }).when(repository).readAll(any());
+        }).when(repository).readAllTradingValues(any());
 
-        Path exportFile = service.exportAll();
+        Path exportFile = service.exportCustomerTradingValues();
         try {
             try (InputStream input = Files.newInputStream(exportFile);
                  XSSFWorkbook workbook = new XSSFWorkbook(input)) {
@@ -70,14 +70,14 @@ class CustomerTradingValueServiceTest {
                 assertEquals("=1+1", sheet.getRow(251).getCell(3).getStringCellValue());
             }
         } finally {
-            service.deleteExport(exportFile);
+            service.deleteExportFile(exportFile);
         }
         assertFalse(Files.exists(exportFile));
     }
 
     @Test
     void exportsHeaderWhenDatabaseIsEmpty() throws Exception {
-        Path exportFile = service.exportAll();
+        Path exportFile = service.exportCustomerTradingValues();
         try {
             try (InputStream input = Files.newInputStream(exportFile);
                  XSSFWorkbook workbook = new XSSFWorkbook(input)) {
@@ -86,49 +86,49 @@ class CustomerTradingValueServiceTest {
                 assertEquals("id", workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
             }
         } finally {
-            service.deleteExport(exportFile);
+            service.deleteExportFile(exportFile);
         }
     }
 
     @Test
     void preservesDatabaseFailureAndDeletesIncompleteExport() {
         var failure = new DataAccessResourceFailureException("query failed");
-        doThrow(failure).when(repository).readAll(any());
+        doThrow(failure).when(repository).readAllTradingValues(any());
         CustomerTradingValueService observedService = spy(service);
 
         assertSame(failure, assertThrows(DataAccessResourceFailureException.class,
-                observedService::exportAll));
+                observedService::exportCustomerTradingValues));
 
         ArgumentCaptor<Path> file = ArgumentCaptor.forClass(Path.class);
-        verify(observedService).deleteExport(file.capture());
+        verify(observedService).deleteExportFile(file.capture());
         assertFalse(Files.exists(file.getValue()));
     }
 
     @Test
     void mapsWorkbookIoFailureAndDeletesIncompleteExport() {
         doThrow(new UncheckedIOException(new IOException("write failed")))
-                .when(repository).readAll(any());
+                .when(repository).readAllTradingValues(any());
         CustomerTradingValueService observedService = spy(service);
 
-        APIException failure = assertThrows(APIException.class, observedService::exportAll);
+        APIException failure = assertThrows(APIException.class, observedService::exportCustomerTradingValues);
         assertEquals("EXCEL_EXPORT_FAILED", failure.getErrorCode());
 
         ArgumentCaptor<Path> file = ArgumentCaptor.forClass(Path.class);
-        verify(observedService).deleteExport(file.capture());
+        verify(observedService).deleteExportFile(file.capture());
         assertFalse(Files.exists(file.getValue()));
     }
 
     @Test
     void mapsSxssfFlushFailureAndDeletesIncompleteExport() {
         doThrow(new IllegalStateException(new IOException("flush failed")))
-                .when(repository).readAll(any());
+                .when(repository).readAllTradingValues(any());
         CustomerTradingValueService observedService = spy(service);
 
-        APIException failure = assertThrows(APIException.class, observedService::exportAll);
+        APIException failure = assertThrows(APIException.class, observedService::exportCustomerTradingValues);
         assertEquals("EXCEL_EXPORT_FAILED", failure.getErrorCode());
 
         ArgumentCaptor<Path> file = ArgumentCaptor.forClass(Path.class);
-        verify(observedService).deleteExport(file.capture());
+        verify(observedService).deleteExportFile(file.capture());
         assertFalse(Files.exists(file.getValue()));
     }
 }
