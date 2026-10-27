@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Excel Scan API",
-                 "description":  "Scan .xlsx toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
+                 "description":  "Scan khach hang .xlsx (name, email, phone, unitPrice) toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "variable":  [
@@ -25,7 +25,7 @@
                                      "auth":  {
                                                   "type":  "noauth"
                                               },
-                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "url":  "{{baseUrl}}/api/excel-scans-customer",
                                      "body":  {
                                                   "mode":  "formdata",
                                                   "formdata":  [
@@ -33,7 +33,7 @@
                                                                        "key":  "file",
                                                                        "type":  "file",
                                                                        "src":  "",
-                                                                       "description":  "Chon file .xlsx toi da 10 MB; dong dau la header."
+                                                                       "description":  "Chon file .xlsx toi da 10 MB; header dung thu tu: name, email, phone, unitPrice; unitPrice la so thap phan."
                                                                    }
                                                                ]
                                               }
@@ -45,8 +45,7 @@
                                                       "type":  "text/javascript",
                                                       "exec":  [
                                                                    "pm.test(\"HTTP 200\", () =\u003e pm.response.to.have.status(200));",
-                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"SCAN_SUCCESS\"));",
-                                                                   "pm.test(\"Rows are JSON array\", () =\u003e pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                                                                   "pm.test(\"Rows are JSON array\", () =\u003e pm.expect(pm.response.json()).to.be.an(\"array\"));"
                                                                ]
                                                   }
                                    }
@@ -65,7 +64,7 @@
                                      "auth":  {
                                                   "type":  "noauth"
                                               },
-                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "url":  "{{baseUrl}}/api/excel-scans-customer",
                                      "body":  {
                                                   "mode":  "formdata",
                                                   "formdata":  [
@@ -85,7 +84,7 @@
                                                       "exec":  [
                                                                    "pm.test(\"HTTP 400\", () =\u003e pm.response.to.have.status(400));",
                                                                    "pm.test(\"JSON response\", () =\u003e pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\"));",
-                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"INVALID_EXCEL\"));"
+                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"INVALID_EXCEL\"));"
                                                                ]
                                                   }
                                    }
@@ -108,7 +107,7 @@
                                      "auth":  {
                                                   "type":  "noauth"
                                               },
-                                     "url":  "{{baseUrl}}/api/excel-scans",
+                                     "url":  "{{baseUrl}}/api/excel-scans-customer",
                                      "body":  {
                                                   "mode":  "raw",
                                                   "raw":  "{}",
@@ -126,7 +125,7 @@
                                                       "type":  "text/javascript",
                                                       "exec":  [
                                                                    "pm.test(\"HTTP 400\", () =\u003e pm.response.to.have.status(400));",
-                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().code).to.eql(\"INVALID_EXCEL\"));"
+                                                                   "pm.test(\"Response code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"INVALID_EXCEL\"));"
                                                                ]
                                                   }
                                    }

@@ -1,9 +1,8 @@
 package com.example.excelimport.controller;
 
-import com.example.excelimport.dto.response.ExcelDataResponse;
-import com.example.excelimport.service.ExcelScanService;
+import com.example.excelimport.dto.CustomerData;
+import com.example.excelimport.service.CustomerService;
 import java.util.List;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,21 +16,15 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExcelScanController {
 
     @Autowired
-    private ExcelScanService excelScanService;
+    private CustomerService customerService;
 
-    @PostMapping("/excel-scans")
-    public ResponseEntity<ExcelDataResponse> scanExcel(
+    // POST /api/excel-scans-customer
+    @PostMapping("/excel-scans-customer")
+    public ResponseEntity<List<CustomerData>> scanCustomers(
             @RequestParam("file") MultipartFile excelFile
     ) {
-        List<Map<String, String>> records = excelScanService.scanExcel(excelFile);
+        List<CustomerData> customers = customerService.scanCustomers(excelFile);
 
-        ExcelDataResponse response = new ExcelDataResponse(
-                "SCAN_SUCCESS",
-                "Đọc file Excel thành công",
-                records,
-                List.of()
-        );
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(customers);
     }
 }
