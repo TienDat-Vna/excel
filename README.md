@@ -1,7 +1,44 @@
-# Excel → JSON API
+# Excel import và export API
 
 API nhận một file `.xlsx` tối đa 10 MB, đọc sheet đầu tiên và trả dữ liệu JSON.
-Dòng 1 gồm `name`, `email`, `phone`, `unitPrice` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Không dùng database.
+Dòng 1 gồm `id`, `name`, `email`, `phone` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Luồng import không dùng database.
+
+API export đọc toàn bộ bảng MySQL `customer_trading_value_history` và trả file `.xlsx`.
+
+## Xuất lịch sử giao dịch
+
+Endpoint duy nhất cho export: `GET /api/customer-trading-values/export`.
+Không có bộ lọc hoặc phân trang; không gộp hay loại trùng bản ghi.
+
+1. Mở Docker Desktop, khai báo `DB_PASSWORD` và `MYSQL_ROOT_PASSWORD` trong môi trường PowerShell hoặc `.env` dùng riêng cho Docker Compose.
+2. Chạy `docker compose up -d mysql`.
+3. Kết nối MySQL tại `127.0.0.1:3307`, database `excel_import`, user `excel_app`.
+4. Chỉ với DB mới: chạy `ops/sql/001-create-customer-trading-value-history.sql`.
+5. Tùy chọn chạy `ops/sql/002-seed-customer-trading-value-history.sql` để thêm 7 dòng giả. Chạy lại sẽ thêm dữ liệu; không chạy lại trên DB đã có dữ liệu mẫu nếu không cần.
+6. Chạy ứng dụng với biến môi trường `DB_PASSWORD` của user `excel_app`. Spring Boot không tự đọc `.env` của Compose.
+
+Không cần chạy lại SQL nếu bảng đã được tạo. Ứng dụng không tự tạo bảng, seed hoặc sửa dữ liệu.
+`DB_URL` mặc định `jdbc:mysql://127.0.0.1:3307/excel_import`, `DB_USERNAME` mặc định `excel_app`.
+Không đặt mật khẩu thật trong source. Thiếu/sai mật khẩu sẽ làm export thất bại; import không truy vấn DB.
+
+```powershell
+curl.exe --fail --output customer-trading-values.xlsx http://localhost:8080/api/customer-trading-values/export
+```
+
+File gồm `id`, `customer_id`, `branch_id`, `pcc_id`, `total_trading_value`, sắp xếp theo `id` tăng dần.
+Các ô dữ liệu là Text để giữ số 0 đầu, ID dài và giá trị tiền chính xác; muốn dùng SUM cần chuyển kiểu phù hợp.
+Bảng rỗng trả file chỉ có header. Không xuất `created_at`, `updated_at`; không có `business_date`.
+File được ghi theo từng dòng ra đĩa, tự chia sheet; cần đủ dung lượng thư mục tạm và thời gian cho toàn bộ lần xuất.
+
+Test thường: `.\mvnw.cmd clean verify`. Test MySQL thật chỉ đọc dữ liệu local (yêu cầu DB không thay đổi trong lúc đối chiếu):
+
+```powershell
+$env:EXCEL_EXPORT_MYSQL_TEST = 'true'
+.\mvnw.cmd '-Dtest=CustomerTradingValueDatabaseTest' test
+Remove-Item Env:EXCEL_EXPORT_MYSQL_TEST
+```
+
+Test MySQL dùng `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` của ứng dụng; không sửa dữ liệu.
 
 ## Chạy ứng dụng
 
@@ -30,12 +67,12 @@ Port mặc định 8080; đổi bằng biến môi trường `SERVER_PORT`.
 
 Endpoint: `POST /api/excel-scans-customer`.
 Response thành công: HTTP 200, body là mảng `CustomerData` trực tiếp, không có lớp bọc code/message/data/errors.
-`name`, `email`, `phone` trả dạng chuỗi; ô trống là `""`. `unitPrice` là số thập phân (`BigDecimal`), ô trống là `null`. Bỏ qua dòng trống.
+`id` là số nguyên dương (`Long`), bắt buộc với dòng có dữ liệu. `name`, `email`, `phone` là chuỗi; ô trống trả `""`. Bỏ qua dòng trống.
 File chỉ có header trả `[]`.
 
 Giới hạn 10 MB/file, 11 MB/request. Từ chối file sai định dạng, header thiếu/trùng,
 cột dữ liệu thiếu header hoặc ô gộp trên sheet được đọc.
-Công thức dùng kết quả đã lưu, không tính lại. Ô lỗi ở trường chuỗi giữ nguyên; ô lỗi hoặc giá trị không phải số tại `unitPrice` trả `INVALID_EXCEL`.
+Công thức dùng kết quả đã lưu, không tính lại. Ô lỗi ở trường chuỗi giữ nguyên; id thiếu, sai kiểu, không dương hoặc vượt Long trả `INVALID_EXCEL`.
 Đặt số điện thoại/mã có số 0 đầu ở dạng Text trong Excel để giữ nguyên dữ liệu.
 
 Response lỗi dùng `code = -1`, `errorCode` là mã lỗi; `message` là khóa thông báo và `messageDetail` là chi tiết tiếng Việt. Client cần đọc `errorCode` cho lỗi; khi thành công, đọc mảng trực tiếp từ body.
@@ -45,7 +82,7 @@ Contract và ví dụ JSON: [docs/api-contract.md](docs/api-contract.md).
 ## Cấu trúc chính
 
 - `controller/ExcelScanController.java`: nhận multipart, gọi service và trả JSON.
-- `dto/CustomerData.java`: DTO cố định gồm name/email/phone/unitPrice.
+- `dto/CustomerData.java`: DTO cố định gồm id/name/email/phone.
 - `service/CustomerService.java`: mở/đóng workbook, đọc từng dòng và map DTO khách hàng.
 - `service/ExcelScanService.java`: chỉ validate file, workbook, header và cấu trúc dòng.
 - `constant/FileConstant.java`: hằng số dùng cho xử lý file, như giới hạn dung lượng.
@@ -57,7 +94,7 @@ Contract và ví dụ JSON: [docs/api-contract.md](docs/api-contract.md).
 - `src/test/java/com/example/excelimport/ExcelScanTest.java`: test tích hợp qua HTTP thật.
 
 Các đường dẫn Java chính nằm dưới `src/main/java/com/example/excelimport/`.
-Stack: Spring MVC, Apache POI; không cần JDBC, H2 hay database bên ngoài.
+Stack: Spring MVC, Apache POI, Spring JDBC và MySQL cho export; không dùng H2.
 
 ## Quy ước đặt tên và cách đọc code
 
@@ -84,8 +121,8 @@ workbook luôn được đóng bằng try-with-resources.
 `ExcelScanService` không mở file, đọc danh sách bản ghi hoặc map DTO.
 Header cố định và đúng thứ tự; bỏ khoảng trắng hai đầu tên cột.
 `DataFormatter` giữ định dạng hiển thị cho các trường chuỗi.
-`unitPrice` lấy giá trị số gốc, không lấy chuỗi hiển thị đã làm tròn hoặc có phân cách hàng nghìn.
-Giá dạng text phải chuyển trực tiếp được sang `BigDecimal`, dùng dấu chấm thập phân, không chứa ký hiệu tiền/phân cách hàng nghìn.
+`id` lấy giá trị số nguyên gốc, không phụ thuộc định dạng hiển thị. ID dạng Text được parse sang Long;
+ID dài nên lưu Text trong Excel để tránh mất chữ số. Không tự sinh id hoặc kiểm tra trùng id trong bước scan.
 Khi gặp lỗi, theo tiếp `APIException` → `ErrorCodeDetail` → `APIExceptionHandler`.
 
 ## Giới hạn hiện tại

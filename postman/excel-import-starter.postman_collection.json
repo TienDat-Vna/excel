@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Excel Scan API",
-                 "description":  "Scan khach hang .xlsx (name, email, phone, unitPrice) toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
+                 "description":  "Scan khach hang .xlsx (id, name, email, phone) toi da 10 MB thanh JSON. Request 01 can chon file tren may.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "variable":  [
@@ -12,6 +12,18 @@
                      }
                  ],
     "item":  [
+                 {
+                     "name": "Export - Customer Trading Values",
+                     "request": {
+                         "method": "GET",
+                         "auth": { "type": "noauth" },
+                         "header": [
+                             { "key": "Accept", "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+                         ],
+                         "url": "{{baseUrl}}/api/customer-trading-values/export",
+                         "description": "Xuat tat ca ban ghi, khong bo loc. Dung Save Response de luu file .xlsx."
+                     }
+                 },
                  {
                      "name":  "01 - Scan Excel",
                      "request":  {
@@ -33,7 +45,7 @@
                                                                        "key":  "file",
                                                                        "type":  "file",
                                                                        "src":  "",
-                                                                       "description":  "Chon file .xlsx toi da 10 MB; header dung thu tu: name, email, phone, unitPrice; unitPrice la so thap phan."
+                                                                       "description":  "Chon file .xlsx toi da 10 MB; header dung thu tu: id, name, email, phone; id la so nguyen duong."
                                                                    }
                                                                ]
                                               }

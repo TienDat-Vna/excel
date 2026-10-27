@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class CustomerService {
 
-    private static final List<String> CUSTOMER_HEADERS = List.of("name", "email", "phone", "unitPrice");
+    private static final List<String> CUSTOMER_HEADERS = List.of("id", "name", "email", "phone");
 
     @Autowired
     private ExcelScanService excelScanService;
@@ -65,53 +65,61 @@ public class CustomerService {
             }
             excelScanService.validateDataRow(dataRow, CUSTOMER_HEADERS.size(), dataFormatter);
 
-            String name = dataFormatter.formatCellValue(dataRow.getCell(0));
-            String email = dataFormatter.formatCellValue(dataRow.getCell(1));
-            String phone = dataFormatter.formatCellValue(dataRow.getCell(2));
-            BigDecimal unitPrice = readUnitPrice((XSSFCell) dataRow.getCell(3));
+            Long id = readId((XSSFCell) dataRow.getCell(0));
+            String name = dataFormatter.formatCellValue(dataRow.getCell(1));
+            String email = dataFormatter.formatCellValue(dataRow.getCell(2));
+            String phone = dataFormatter.formatCellValue(dataRow.getCell(3));
 
-            if (name.isEmpty() && email.isEmpty() && phone.isEmpty() && unitPrice == null) {
+            if (id == null && name.isEmpty() && email.isEmpty() && phone.isEmpty()) {
                 continue;
             }
-            customers.add(new CustomerData(name, email, phone, unitPrice));
+            if (id == null) {
+                throw new APIException(ErrorCodeDetail.INVALID_EXCEL);
+            }
+            customers.add(new CustomerData(id, name, email, phone));
         }
 
         return customers;
     }
 
-    /** Đọc giá gốc sang BigDecimal */
-    private BigDecimal readUnitPrice(XSSFCell priceCell) {
+    /** Đọc id là số nguyên dương; ô trống trả null, sai kiểu hoặc vượt Long báo lỗi. */
+    private Long readId(XSSFCell idCell) {
 
         // Nếu ô trống hoặc null, trả về null
-        if (priceCell == null || priceCell.getCellType() == CellType.BLANK) {
+        if (idCell == null || idCell.getCellType() == CellType.BLANK) {
             return null;
         }
 
         // Nếu ô có công thức, lấy giá trị đã tính toán
-        CellType cellType = priceCell.getCellType();
+        CellType cellType = idCell.getCellType();
         if (cellType == CellType.FORMULA) {
-            cellType = priceCell.getCachedFormulaResultType();
+            cellType = idCell.getCachedFormulaResultType();
         }
 
-        String priceValue;
+        String idValue;
         if (cellType == CellType.NUMERIC) {
-            priceValue = priceCell.getRawValue();
+            idValue = idCell.getRawValue();
         } else if (cellType == CellType.STRING) {
-            priceValue = priceCell.getStringCellValue().strip();
-            if (priceValue.isEmpty()) {
+            idValue = idCell.getStringCellValue().strip();
+            if (idValue.isEmpty()) {
                 return null;
             }
         } else {
             throw new APIException(ErrorCodeDetail.INVALID_EXCEL);
         }
 
-        if (priceValue == null) {
+        if (idValue == null) {
             throw new APIException(ErrorCodeDetail.INVALID_EXCEL);
         }
 
         try {
-            return new BigDecimal(priceValue);
-        } catch (NumberFormatException exception) {
+            long id = cellType == CellType.NUMERIC
+                    ? new BigDecimal(idValue).longValueExact() : Long.parseLong(idValue);
+            if (id <= 0) {
+                throw new APIException(ErrorCodeDetail.INVALID_EXCEL);
+            }
+            return id;
+        } catch (NumberFormatException | ArithmeticException exception) {
             throw new APIException(ErrorCodeDetail.INVALID_EXCEL);
         }
     }

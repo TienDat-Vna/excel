@@ -1,41 +1,17 @@
-# Dữ liệu test Postman
+# File mẫu cho API sản phẩm
 
-Gửi `POST http://localhost:8080/api/excel-scans`, Body → form-data,
-key `file`, kiểu File. Để Postman tự tạo Content-Type.
+Gửi `POST /api/product-scans`, multipart field `file`.
 
 | File | Kết quả kỳ vọng |
 | --- | --- |
-| `01-valid.xlsx` | 200, `SCAN_SUCCESS`, `data` có 2 dòng; giữ mã `0001`, `0002`, note trống là `""` |
-| `02-header-only.xlsx` | 200, `SCAN_SUCCESS`, `data = []` |
-| `03-duplicate-header.xlsx` | 400, `INVALID_EXCEL` — tên header trùng |
-| `04-missing-header.xlsx` | 400, `INVALID_EXCEL` — tên header cột 2 trống |
+| `01-valid.xlsx` | 200, hai sản phẩm ID 1 và 2, giá 125000 và 89000 |
+| `02-header-only.xlsx` | 200, `data = []` |
+| `03-duplicate-header.xlsx` | 400, `INVALID_EXCEL` |
+| `04-missing-header.xlsx` | 400, `INVALID_EXCEL` |
 | `05-wrong-type.csv` | 400, `INVALID_FILE_TYPE` |
-| `06-invalid-excel.xlsx` | 400, `INVALID_EXCEL` — file text đổi đuôi, không phải workbook |
-| `07-too-large.xlsx` | 413, `FILE_TOO_LARGE` — 10.485.761 byte, vượt giới hạn 1 byte |
+| `06-invalid-excel.xlsx` | 400, `INVALID_EXCEL` |
+| `07-too-large.xlsx` | 413, `FILE_TOO_LARGE` |
 
-File 07 là nội dung giả để kiểm tra giới hạn upload, không phải workbook hợp lệ.
-Kiểm tra thiếu file: bỏ key `file` khỏi request multipart; kỳ vọng 400, `INVALID_EXCEL`.
-
-Nội dung `data` kỳ vọng của file 01:
-
-```json
-[
-  {
-    "productCode": "0001",
-    "productName": "Sản phẩm A",
-    "quantity": "10",
-    "unitPrice": "125000",
-    "note": "Dữ liệu thử"
-  },
-  {
-    "productCode": "0002",
-    "productName": "Sản phẩm B",
-    "quantity": "5",
-    "unitPrice": "89000",
-    "note": ""
-  }
-]
-```
-
-Đã kiểm tra 7 file bằng cách gọi trực tiếp `ExcelScanService`.
-Chưa gửi các file mẫu này qua Postman UI.
+File 07 là dữ liệu giả vượt 10 MB một byte để kiểm tra giới hạn upload.
+Thiếu field `file` trả 400, `INVALID_EXCEL`.
+Contract chi tiết: [API sản phẩm](../docs/api-contract.md).
