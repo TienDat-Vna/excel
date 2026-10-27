@@ -13,6 +13,18 @@
                  ],
     "item":  [
                  {
+                     "name": "Export - Customer Trading Values",
+                     "request": {
+                         "method": "GET",
+                         "auth": { "type": "noauth" },
+                         "header": [
+                             { "key": "Accept", "value": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+                         ],
+                         "url": "{{baseUrl}}/api/customer-trading-values/export",
+                         "description": "Xuat tat ca ban ghi, khong bo loc. Dung Save Response de luu file .xlsx."
+                     }
+                 },
+                 {
                      "name":  "01 - Scan Excel",
                      "request":  {
                                      "method":  "POST",

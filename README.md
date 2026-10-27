@@ -1,7 +1,44 @@
-# Excel → JSON API
+# Excel import và export API
 
 API nhận một file `.xlsx` tối đa 10 MB, đọc sheet đầu tiên và trả dữ liệu JSON.
-Dòng 1 gồm `id`, `name`, `email`, `phone` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Không dùng database.
+Dòng 1 gồm `id`, `name`, `email`, `phone` theo đúng thứ tự; mỗi dòng bên dưới map sang `CustomerData`. Luồng import không dùng database.
+
+API export đọc toàn bộ bảng MySQL `customer_trading_value_history` và trả file `.xlsx`.
+
+## Xuất lịch sử giao dịch
+
+Endpoint duy nhất cho export: `GET /api/customer-trading-values/export`.
+Không có bộ lọc hoặc phân trang; không gộp hay loại trùng bản ghi.
+
+1. Mở Docker Desktop, khai báo `DB_PASSWORD` và `MYSQL_ROOT_PASSWORD` trong môi trường PowerShell hoặc `.env` dùng riêng cho Docker Compose.
+2. Chạy `docker compose up -d mysql`.
+3. Kết nối MySQL tại `127.0.0.1:3307`, database `excel_import`, user `excel_app`.
+4. Chỉ với DB mới: chạy `ops/sql/001-create-customer-trading-value-history.sql`.
+5. Tùy chọn chạy `ops/sql/002-seed-customer-trading-value-history.sql` để thêm 7 dòng giả. Chạy lại sẽ thêm dữ liệu; không chạy lại trên DB đã có dữ liệu mẫu nếu không cần.
+6. Chạy ứng dụng với biến môi trường `DB_PASSWORD` của user `excel_app`. Spring Boot không tự đọc `.env` của Compose.
+
+Không cần chạy lại SQL nếu bảng đã được tạo. Ứng dụng không tự tạo bảng, seed hoặc sửa dữ liệu.
+`DB_URL` mặc định `jdbc:mysql://127.0.0.1:3307/excel_import`, `DB_USERNAME` mặc định `excel_app`.
+Không đặt mật khẩu thật trong source. Thiếu/sai mật khẩu sẽ làm export thất bại; import không truy vấn DB.
+
+```powershell
+curl.exe --fail --output customer-trading-values.xlsx http://localhost:8080/api/customer-trading-values/export
+```
+
+File gồm `id`, `customer_id`, `branch_id`, `pcc_id`, `total_trading_value`, sắp xếp theo `id` tăng dần.
+Các ô dữ liệu là Text để giữ số 0 đầu, ID dài và giá trị tiền chính xác; muốn dùng SUM cần chuyển kiểu phù hợp.
+Bảng rỗng trả file chỉ có header. Không xuất `created_at`, `updated_at`; không có `business_date`.
+File được ghi theo từng dòng ra đĩa, tự chia sheet; cần đủ dung lượng thư mục tạm và thời gian cho toàn bộ lần xuất.
+
+Test thường: `.\mvnw.cmd clean verify`. Test MySQL thật chỉ đọc dữ liệu local (yêu cầu DB không thay đổi trong lúc đối chiếu):
+
+```powershell
+$env:EXCEL_EXPORT_MYSQL_TEST = 'true'
+.\mvnw.cmd '-Dtest=CustomerTradingValueDatabaseTest' test
+Remove-Item Env:EXCEL_EXPORT_MYSQL_TEST
+```
+
+Test MySQL dùng `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` của ứng dụng; không sửa dữ liệu.
 
 ## Chạy ứng dụng
 
@@ -57,7 +94,7 @@ Contract và ví dụ JSON: [docs/api-contract.md](docs/api-contract.md).
 - `src/test/java/com/example/excelimport/ExcelScanTest.java`: test tích hợp qua HTTP thật.
 
 Các đường dẫn Java chính nằm dưới `src/main/java/com/example/excelimport/`.
-Stack: Spring MVC, Apache POI; không cần JDBC, H2 hay database bên ngoài.
+Stack: Spring MVC, Apache POI, Spring JDBC và MySQL cho export; không dùng H2.
 
 ## Quy ước đặt tên và cách đọc code
 

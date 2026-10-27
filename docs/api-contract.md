@@ -1,4 +1,34 @@
-# Hợp đồng API scan Excel → JSON
+# Hợp đồng API Excel
+
+## Export lịch sử giá trị giao dịch
+
+`GET /api/customer-trading-values/export`
+
+- Không có query parameter hoặc request body; đọc toàn bộ bản ghi theo `id ASC`.
+- Không lọc năm/ngày/khách hàng, không gộp hoặc loại trùng.
+- Dữ liệu lấy từ `customer_trading_value_history`; không sửa DB.
+- HTTP 200, Content-Type `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+- Content-Disposition `attachment; filename="customer-trading-values.xlsx"`.
+- Các cột: `id`, `customer_id`, `branch_id`, `pcc_id`, `total_trading_value`.
+- Tất cả ô dữ liệu là Text; tiền dùng biểu diễn thập phân chính xác, không qua double.
+- Chuỗi bắt đầu bằng `=` vẫn là Text, không chuyển thành công thức.
+- Sheet `TradingValues_1`, `TradingValues_2`, ...; mỗi sheet có header giống nhau, tối đa 1.048.575 dòng dữ liệu.
+- Không có dữ liệu: file vẫn có sheet và header.
+- Không có giới hạn 50.000 dòng. File hoàn chỉnh được tạo trước khi trả HTTP response, sau đó xóa file tạm.
+- Một lượt đọc DB dùng transaction read-only, isolation REPEATABLE_READ trên InnoDB. Không bao gồm bản ghi commit sau khi snapshot được thiết lập.
+
+Lỗi trước khi gửi file dùng cấu trúc `APIErrorResponse` hiện có:
+
+| HTTP | errorCode | Ý nghĩa |
+| --- | --- | --- |
+| 503 | DATABASE_UNAVAILABLE | Không lấy được kết nối/khởi tạo transaction DB |
+| 500 | DATABASE_QUERY_FAILED | Truy vấn DB thất bại |
+| 500 | EXCEL_EXPORT_FAILED | Tạo hoặc mở/đọc file xuất thất bại |
+
+Nếu client ngắt kết nối sau khi response đã gửi, không thể đổi HTTP status hoặc trả JSON lỗi; server ghi log mã lỗi và dọn file.
+API local chưa có xác thực như API import; không triển khai công khai trước khi bổ sung quyền truy cập dữ liệu khách hàng.
+
+## Import khách hàng
 
 API nhận file Excel khách hàng theo schema cố định và trả các dòng bên dưới thành DTO JSON.
 Không kiểm tra nghiệp vụ khách hàng và không lưu dữ liệu vào database.
